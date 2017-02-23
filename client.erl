@@ -4,10 +4,13 @@
 
 %% inititial_state/2 and handle/2 are used togetger with the genserver module,
 %% explained in the lecture about Generic server.
+%%
+
+
 
 %% Produce initial state
 initial_state(Nick, GUIName) ->
-    #client_st { gui = GUIName }.
+    #client_st { gui = GUIName,nick=Nick }.
 
 %% ---------------------------------------------------------------------------
 
@@ -18,18 +21,26 @@ initial_state(Nick, GUIName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the
 %% requesting process and NewState is the new state of the client.
 
-%% Connect to server
-handle(St, {connect, Server}) ->
-    Data = "hello?",
-    io:fwrite("Client is sending: ~p~n", [Data]),
+	%% Connect to server
+	handle(St, {connect, Server}) ->
+	From=self(),
+	Nick=St#client_st.nick,
+    Request = {connect,{From,Nick,Server}},
+	io:fwrite("Request to send ~p~n", [Request]),
     ServerAtom = list_to_atom(Server),
-    Response = genserver:request(ServerAtom, Data),
+    Response = genserver:request(ServerAtom, Request),
     io:fwrite("Client received: ~p~n", [Response]),
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+	case Response of
+		"User already connected" ->
+			{reply, {error, connection_exist, "User is connected already"}, St};
+		"Connection established"->
+			{reply, ok, St#client_st{status = disconnected}}
+	end;
+   
 
 %% Disconnect from server
 handle(St, disconnect) ->
+	io:fwrite("disconnected ~n"),
     % {reply, ok, St} ;
     {reply, {error, not_implemented, "Not implemented"}, St} ;
 
@@ -37,6 +48,8 @@ handle(St, disconnect) ->
 handle(St, {join, Channel}) ->
     % {reply, ok, St} ;
     {reply, {error, not_implemented, "Not implemented"}, St} ;
+
+
 
 %% Leave channel
 handle(St, {leave, Channel}) ->
@@ -50,8 +63,9 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
 
 %% Get current nick
 handle(St, whoami) ->
-    % {reply, "nick", St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+ 	io:fwrite("Requested whoami ~n"),
+    {reply, St#client_st.nick, St} ;
+    %{reply, {error, not_implemented, "Not implemented"}, St} ;
 
 %% Change nick
 handle(St, {nick, Nick}) ->
@@ -60,5 +74,6 @@ handle(St, {nick, Nick}) ->
 
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
+	 io:fwrite("Incoming msg"),
     gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Name++"> "++Msg}),
     {reply, ok, St}.
