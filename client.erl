@@ -34,7 +34,7 @@ initial_state(Nick, GUIName) ->
 		"User already connected" ->
 			{reply, {error, connection_exist, "User is connected already"}, St};
 		"Connection established"->
-			{reply, ok, St#client_st{status = disconnected}}
+			{reply, ok, St#client_st{status = connected}}
 	end;
    
 
@@ -46,8 +46,10 @@ handle(St, disconnect) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+	io:fwrite("Channel name ~p~n",[Channel]),
+	genserver:request(list_to_atom("shire"),{join,Channel}),
+    {reply, ok, St} ;
+    %{reply, {error, not_implemented, "Not implemented"}, St} ;
 
 
 

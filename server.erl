@@ -31,6 +31,9 @@ handle(St, Request) ->
        {disconnect,_} ->
          io:fwrite("Received for connection ~p~n", [Request]),
 		 {reply, Response, St};
+	   {join,_} ->
+		   io:fwrite("Case join"),
+		   channelhandler(St,Request);
         _ ->
          io:fwrite("Nothing happened ~p~n", [Request]),
 		 {reply, Response, St}
@@ -67,7 +70,14 @@ connectionhandler(St,Message) ->
 			{reply,SucessResponse,ServerState}
 	end.
 
-
+channelhandler(St,Request)->
+	{join,ChannelName}=Request,
+	io:fwrite("Handling channel request for channel name ~p~n",[ChannelName]),
+	genserver:start(list_to_atom(ChannelName), channel:initial_state(channelname), fun client:handle/2),
+	io:fwrite("Attempt to send message to channel"),
+	genserver:request(list_to_atom(ChannelName),Request),
+	{reply,ok,St}.
+	
 % Sample function trying to send message from server to client
 
 sendresponse(St,From) ->

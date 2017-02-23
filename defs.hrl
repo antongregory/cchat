@@ -7,3 +7,6 @@
 % This record defines the structure of the server process.
 % Add whatever other fields you need.
 -record(server_st, {servername, users = [{}], channels = []}).
+
+% This record is for handling the channel parameters
+-record(channel_st,{channelname,users=[]}).
