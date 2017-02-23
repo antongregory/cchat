@@ -73,9 +73,12 @@ connectionhandler(St,Message) ->
 channelhandler(St,Request)->
 	{join,ChannelName}=Request,
 	io:fwrite("Handling channel request for channel name ~p~n",[ChannelName]),
-	genserver:start(list_to_atom(ChannelName), channel:initial_state(channelname), fun client:handle/2),
+	genserver:start(list_to_atom(ChannelName), channel:initial_state(channelname), fun channel:handle/2),
 	io:fwrite("Attempt to send message to channel"),
-	genserver:request(list_to_atom(ChannelName),Request),
+	%genserver:request(list_to_atom(ChannelName),Request),
+	Pid=list_to_atom(ChannelName),
+	Ref = make_ref(),
+	Pid!{request, self(), Ref, Request},
 	{reply,ok,St}.
 	
 % Sample function trying to send message from server to client

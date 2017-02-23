@@ -19,8 +19,7 @@ initial_state(ChannelName) ->
 
 handle(St, Request) ->
 	io:fwrite("Trying Joining ~p~n",[Request]),
-	receive
-		%io:fwrite("Trying Joining ~p~n",[Request]),
+	 case Request of 
 		{join,_}->
 			io:fwrite("Joining "),
 			{reply,ok,St};
