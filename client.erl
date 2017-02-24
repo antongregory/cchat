@@ -23,19 +23,17 @@ initial_state(Nick, GUIName) ->
 
 	%% Connect to server
 	handle(St, {connect, Server}) ->
-	From=self(),
-	Nick=St#client_st.nick,
-    Request = {connect,{From,Nick,Server}},
-	io:fwrite("Request to send ~p~n", [Request]),
-    ServerAtom = list_to_atom(Server),
-    Response = genserver:request(ServerAtom, Request),
-    io:fwrite("Client received: ~p~n", [Response]),
-	case Response of
-		"User already connected" ->
+	io:fwrite("St#client_st.status ~p~n" ,[St#client_st.status]),
+	case St#client_st.status of
+		connected ->
 			{reply, {error, connection_exist, "User is connected already"}, St};
-		"Connection established"->
-			{reply, ok, St#client_st{status = connected}}
+		disconnected ->
+			connectionhandler(St,{connect,Server});
+		_ ->
+			io:fwrite("Nothing happened"),
+			{reply, {error, connection_error, "Error while connecting"}, St}
 	end;
+		
    
 
 %% Disconnect from server
@@ -47,7 +45,8 @@ handle(St, disconnect) ->
 % Join channel
 handle(St, {join, Channel}) ->
 	io:fwrite("Channel name ~p~n",[Channel]),
-	genserver:request(list_to_atom("shire"),{join,Channel}),
+	Request = {self(),Channel},
+	genserver:request(list_to_atom("shire"),{join,Request}),
     {reply, ok, St} ;
     %{reply, {error, not_implemented, "Not implemented"}, St} ;
 
@@ -67,15 +66,39 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
 handle(St, whoami) ->
  	io:fwrite("Requested whoami ~n"),
     {reply, St#client_st.nick, St} ;
-    %{reply, {error, not_implemented, "Not implemented"}, St} ;
+
 
 %% Change nick
 handle(St, {nick, Nick}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+	State=St#client_st{nick = Nick},
+	case St#client_st.status of
+		connected ->
+			  {reply, {error, user_connected, "User connected already"}, St} ;			 	
+		disconnected ->
+			 %register(Nick,self()),
+			 {reply, ok,State}
+	end;
+	
+	
+   
 
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
 	 io:fwrite("Incoming msg"),
     gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Name++"> "++Msg}),
     {reply, ok, St}.
+
+connectionhandler(St,{connect,Server}) ->
+	From=self(),
+	Nick=St#client_st.nick,
+    Request = {connect,{From,Nick,Server}},
+	io:fwrite("Request to send ~p~n", [Request]),
+	ServerAtom=list_to_atom(Server),
+	Response = genserver:request(ServerAtom, Request),
+    io:fwrite("Client received: ~p~n", [Response]),
+	case Response of
+		"User already connected" ->
+			{reply, {error, connection_exist, "User is connected already"}, St};
+		"Connection established"->
+			{reply, ok, St#client_st{status = connected}}
+	end.

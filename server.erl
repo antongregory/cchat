@@ -18,26 +18,40 @@ initial_state(ServerName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
 
-handle(St, Request) ->
+handle(St, {connect, Message}) ->
 	io:fwrite("state of server ~p~n", [St#server_st.servername]),
-    io:fwrite("Server received: ~p~n", [Request]),
+    io:fwrite("Server received: ~p~n", [Message]),
     Response = "hi!",
     io:fwrite("Server is sending: ~p~n", [Response]),
-	case Request of
-      {connect,_} ->
-		 {connect,Message}=Request,
-         io:fwrite("Received for connection ~p~n", [Request]),
-         connectionhandler(St,Message);
-       {disconnect,_} ->
-         io:fwrite("Received for connection ~p~n", [Request]),
-		 {reply, Response, St};
-	   {join,_} ->
-		   io:fwrite("Case join"),
-		   channelhandler(St,Request);
-        _ ->
-         io:fwrite("Nothing happened ~p~n", [Request]),
-		 {reply, Response, St}
-    end.
+    connectionhandler(St,Message);
+
+
+
+
+handle(St,{join,Request})->
+	{From,ChannelName}=Request,	
+	io:fwrite("Handling channel request for channel name ~p~n",[St#server_st.channels]),
+	Channels=list_to_atom(ChannelName),
+	List=lists:keyfind(Channels, 1, St#server_st.channels),
+	
+	io:fwrite("channel name ~p~n",[List]),
+	case lists:keyfind(ChannelName, 1, St#server_st.channels) of
+		
+		false->
+			genserver:start(list_to_atom(ChannelName), channel:initial_state(ChannelName), fun channel:handle/2),
+			ServerState=St#server_st{channels = [ ChannelName | St#server_st.channels]},
+			Response=genserver:request(list_to_atom(ChannelName),{join,Request}),
+			{reply, Response, ServerState};
+		_ ->
+			io:fwrite("Channel is alive ~n"),
+			genserver:request(list_to_atom(ChannelName),{join,ChannelName})
+	end;
+
+
+
+handle(St, {nick, Nick}) ->
+    % {reply, ok, St} ;
+    {reply, {error, not_implemented, "Not implemented"}, St} .
 
 
 % function to handle the connection requests received in the server
@@ -59,28 +73,13 @@ connectionhandler(St,Message) ->
 			FailureResponse="User already connected",
 			{reply,FailureResponse,St};
 		false ->
-		    %UpdatedList=lists:append(CurrentUsers,[User]),
-			io:fwrite("Users in list ~p~n",[User]),
-			%ServerState=St#server_st{users = [ UserList]},
- 			%NewState=St#server_st{servername="ServerName"},
-			%io:fwrite("fab Users in list ~p~n",[NewState]),
 			ServerState=St#server_st{users = [ User | St#server_st.users]},
 			io:fwrite("fab Users in list ~p~n",[ServerState]),
 			SucessResponse="Connection established",
 			{reply,SucessResponse,ServerState}
 	end.
 
-channelhandler(St,Request)->
-	{join,ChannelName}=Request,
-	io:fwrite("Handling channel request for channel name ~p~n",[ChannelName]),
-	genserver:start(list_to_atom(ChannelName), channel:initial_state(channelname), fun channel:handle/2),
-	io:fwrite("Attempt to send message to channel"),
-	%genserver:request(list_to_atom(ChannelName),Request),
-	Pid=list_to_atom(ChannelName),
-	Ref = make_ref(),
-	Pid!{request, self(), Ref, Request},
-	{reply,ok,St}.
-	
+
 % Sample function trying to send message from server to client
 
 sendresponse(St,From) ->

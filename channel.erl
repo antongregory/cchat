@@ -17,12 +17,26 @@ initial_state(ChannelName) ->
     #channel_st{channelname=ChannelName}.
 
 
-handle(St, Request) ->
-	io:fwrite("Trying Joining ~p~n",[Request]),
-	 case Request of 
-		{join,_}->
-			io:fwrite("Joining "),
-			{reply,ok,St};
-		_ ->
-			{reply,ok,St}
-		end.
+
+
+handle(St, {join,Request}) ->
+	io:fwrite("Joining "),
+	{From,ChannelName} = Request,
+	io:fwrite("Joining ~p~n" ,[ChannelName]),
+ 	case lists:keymember(From, 1, St#channel_st.users) of
+    	false ->
+			io:fwrite("Flase"),
+      		NewState = St#channel_st{users = [ From | St#channel_st.users ]},
+			io:fwrite("Flase ~p~n",[NewState]),
+      		{reply,ok, NewState};
+    	true ->
+			io:fwrite("True"),
+			{reply, {error, user_already_joined, "User joined"}, St}
+		
+ 	end;
+
+
+handle(St, {leave,ChannleName}) ->
+	io:fwrite("Joining "),
+	{reply,ok,St}.
+
