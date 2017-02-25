@@ -32,22 +32,28 @@ handle(St,{join,Request})->
 	{From,ChannelName}=Request,	
 	io:fwrite("Handling channel request for channel name ~p~n",[St#server_st.channels]),
 	Channels=list_to_atom(ChannelName),
-	List=lists:keyfind(Channels, 1, St#server_st.channels),
-	
-	io:fwrite("channel name ~p~n",[List]),
-	case lists:keyfind(ChannelName, 1, St#server_st.channels) of
+	List=lists:member(Channels, St#server_st.channels),
+	MessageForChannel={join,Request},
+	case lists:member(ChannelName,St#server_st.channels) of
 		
 		false->
 			genserver:start(list_to_atom(ChannelName), channel:initial_state(ChannelName), fun channel:handle/2),
 			ServerState=St#server_st{channels = [ ChannelName | St#server_st.channels]},
-			Response=genserver:request(list_to_atom(ChannelName),{join,Request}),
+			Response=genserver:request(list_to_atom(ChannelName),MessageForChannel),
 			{reply, Response, ServerState};
-		_ ->
+		true ->
 			io:fwrite("Channel is alive ~n"),
-			genserver:request(list_to_atom(ChannelName),{join,ChannelName})
+			ResponseFromChannel=genserver:request(list_to_atom(ChannelName),MessageForChannel),
+			{reply,ResponseFromChannel, St}
 	end;
 
-
+handle(St, {msg_from_GUI,Request}) ->
+    % {reply, ok, St} ;
+	{From,Nick,Channel,Msg}=Request,
+	ChannelRequest={From,Nick,Msg},
+	io:fwrite("GUI ~p~n",[Channel]),
+	Response=genserver:request(list_to_atom(Channel),{msg_from_GUI,ChannelRequest}),
+    {reply, {error, not_implemented, "Not implemented"}, St};
 
 handle(St, {nick, Nick}) ->
     % {reply, ok, St} ;
@@ -70,13 +76,11 @@ connectionhandler(St,Message) ->
 	case lists:keymember(From, 1, St#server_st.users) of
 		true ->
       		io:fwrite("User already connected"),
-			FailureResponse="User already connected",
-			{reply,FailureResponse,St};
+			{reply,error,St};
 		false ->
 			ServerState=St#server_st{users = [ User | St#server_st.users]},
 			io:fwrite("fab Users in list ~p~n",[ServerState]),
-			SucessResponse="Connection established",
-			{reply,SucessResponse,ServerState}
+			{reply,ok,ServerState}
 	end.
 
 
