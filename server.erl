@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{}.
+    #server_st{serverName = ServerName, users = [], channels = []}.
 
 %% ---------------------------------------------------------------------------
 
@@ -19,7 +19,50 @@ initial_state(ServerName) ->
 %% and NewState is the new state of the server.
 
 handle(St, Request) ->
-    io:fwrite("Server received: ~p~n", [Request]),
-    Response = "hi!",
-    io:fwrite("Server is sending: ~p~n", [Response]),
-    {reply, Response, St}.
+    case Request of
+        {connect, Info} ->
+            connectHandler(St, Info);
+        {disconnect, Info} ->
+            disconnectHandler(St, Info);
+        {join, Info} ->
+            joinHandler(St, Info)
+    end.
+
+connectHandler(St, {From, Nick, Server}) ->
+    case lists:member(Nick, St#server_st.users) of
+        true ->
+            {reply, "User already connected", St};
+        false ->
+            NewSt = St#server_st{users = [Nick | St#server_st.users]},
+            {reply, "Connection established", NewSt}
+    end.
+
+disconnectHandler(St, {From, Nick, ClientId}) ->
+    case ClientId#client_st.channels =:= [] of
+        true ->
+            case lists:member(Nick, St#server_st.users) of
+                true ->
+                    NewSt = St#server_st{users = [Name || Name <- St#server_st.users, Name =/= Nick]},
+                    {reply, "User disconnected", NewSt};
+                false ->
+                    {reply, "User not connected", St}
+            end;
+        false ->
+            {reply, "Leave channels first", St}
+    end.
+
+joinHandler(St, {From, User, Channel}) ->
+    case lists:member(Channel, St#server_st.channels) of
+        true ->
+            Request = {From, User, Channel},
+            Response = genserver:request(list_to_atom(Channel), {join, Request}),
+            {reply, Response, St};
+        false ->
+            genserver:start(list_to_atom(Channel), channel:initial_state(Channel), fun channel:handle/2),
+            NewSt = St#server_st{channels = [Channel | St#server_st.channels]},
+            Request = {From, User, Channel},
+            Response = genserver:request(list_to_atom(Channel), {join, Request}),
+            {reply, Response, NewSt}
+    end.
+
+
