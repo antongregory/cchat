@@ -38,9 +38,25 @@ initial_state(Nick, GUIName) ->
 
 %% Disconnect from server
 handle(St, disconnect) ->
-	io:fwrite("disconnected ~n"),
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+ 
+	io:fwrite("leng of list ~p~n",[length(St#client_st.channels)]),
+ case length(St#client_st.channels) of 
+	 0 ->
+		 Response=clientrequesthandler(St,{disconnect,self()}),
+		io:fwrite("disconnected ~p~n",[Response]),
+		case Response of 
+			ok->
+				NewState=St#client_st{status=disconnected},
+				{reply, ok, NewState};
+			{error,connection_error,Msg}->
+				{reply, {error, connection_error, Msg}, St} ;
+			error->
+				{reply, {error, error_in_disconnecting, "Error in disconnecting"}, St}
+		end;
+	 _ ->
+		 {error,leave_channels_first,"Leave channels first"}
+ 	end;
+
 
 % Join channel
 handle(St, {join, Channel}) ->
@@ -48,25 +64,60 @@ handle(St, {join, Channel}) ->
 	Request = {self(),Channel},
 	ServerAtom=St#client_st.server,
 	io:fwrite("Format ~p~n",[ServerAtom]),
-	Response=genserver:request(ServerAtom,{join,Request}),	
-    {reply, ok, St} ;
+	Response=clientrequesthandler(St,{join,Request}),
+	case Response of 
+		ok->
+			ClientState=St#client_st{channels = [ Channel | St#client_st.channels]},
+			{reply, ok, ClientState};
+		{error,connection_error,Msg}->
+			 {reply, {error, user_not_connected,Msg}, St} ;
+		{error,user_already_joined,Msg}->
+			 {reply, {error, user_already_joined, Msg}, St} 
+
+	end;
+
+
     %{reply, {error, not_implemented, "Not implemented"}, St} ;
 
 
 
 %% Leave channel
 handle(St, {leave, Channel}) ->
+	Request={self(),Channel},
+	Response=clientrequesthandler(St,{leave,Request}),
+	io:fwrite("User leave Format ~p~n",[Response]),
+	case Response of 
+		ok->
+			NewState=St#client_st{channels = [CName || CName <- St#client_st.channels, CName =/= Channel]},
+			{reply, ok, St};
+		{error,connection_error,Msg}->
+			 {reply, {error, user_not_connected, Msg}, St} ;
+		{error,user_not_joined,Msg}->
+			 {reply, {error, user_not_joined, Msg}, St} 
 
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+	end;
+
+
+
+
 
 
 % Sending messages
 handle(St, {msg_from_GUI, Channel, Msg}) ->
 	io:fwrite("Message from gui "),
 	Request={self(),St#client_st.nick,Channel,Msg},
-	Response=genserver:request(list_to_atom("shire"),{msg_from_GUI,Request}),
-	{reply, ok, St};
+	Response=clientrequesthandler(St,{msg_from_GUI,Request}),
+	io:fwrite("Format ~p~n",[Response]),
+	case Response of 
+		ok->
+			{reply, ok, St};
+		{error,connection_error,Msg}->
+			 {reply, {error, no_connection, "No connection"}, St} ;
+		error->
+			 {reply, {error, not_implemented, "Not implemented"}, St} 
+
+	end;
+
     %{reply, {error, not_implemented, "Not implemented"}, St} ;
 
 %% Get current nick
@@ -103,6 +154,18 @@ handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
 
 sendToGui(GUI,Channel,Msg)->
 	gen_server:call(list_to_atom(GUI), {msg_to_GUI, Channel,Msg}).
+
+clientrequesthandler(St,ServerRequest)->
+	ServerAtom=St#client_st.server,
+	case St#client_st.status of
+		connected ->
+			io:fwrite("Request sent to server ~p~n",[ServerRequest]),
+			genserver:request(ServerAtom,ServerRequest);
+		disconnected ->
+			{error,connection_error,"Connect to server before proceeding"}
+
+end.
+
 
 
 connectionhandler(St,{connect,Server}) ->

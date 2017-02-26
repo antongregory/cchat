@@ -23,7 +23,7 @@ handle(St, {join,Request}) ->
 	io:fwrite("Joining "),
 	{From,ChannelName} = Request,
 	io:fwrite("Joining ~p~n" ,[ChannelName]),
- 	case lists:keymember(From, 1, St#channel_st.users) of
+	case lists:member(From,St#channel_st.users) of
     	false ->
 			io:fwrite("Flase"),
       		NewState = St#channel_st{users = [ From | St#channel_st.users ]},
@@ -31,22 +31,43 @@ handle(St, {join,Request}) ->
       		{reply,ok, NewState};
     	true ->
 			io:fwrite("True"),
-			{reply, {error, user_already_joined, "User joined"}, St}
+			{reply, {error, user_already_joined, "User joined in channel already"}, St}
 		
  	end;
 
 
 handle(St, {msg_from_GUI,Message}) ->
 	io:fwrite("Message received in channel ~p~n",[St]),
-	Response=sendmessagetousers(St,Message),
-	{reply,Response,St};
+	{From,Nick,Channel,Msg}=Message,
+	 case lists:member(From,St#channel_st.users) of
+    	true ->
+			Response=sendmessagetousers(St,Message),
+			Response;
+
+    	false ->
+			io:fwrite("User does not exist in channel"),
+			{reply, {error, user_not_joined, "User not found"}, St}
+		
+ 	end;
 
 
 
 
-handle(St, {leave,ChannleName}) ->
-	io:fwrite("Joining "),
-	{reply,ok,St}.
+handle(St, {leave,Info}) ->
+	io:fwrite("Leaving"),
+	{From,ChannelName} = Info,
+	io:fwrite("Joining ~p~n" ,[St#channel_st.users]),
+ 	case lists:member(From,St#channel_st.users) of
+    	true ->
+			NewState=St#channel_st{users = [Pid || Pid <- St#channel_st.users, Pid =/= From]},
+			io:fwrite("State of chanel: ~p~n",[NewState]),
+      		{reply,ok, NewState};
+    	false ->
+			io:fwrite("User does not exist in channel"),
+			{reply, {error, user_not_joined, "User not found"}, St}
+		
+ 	end.
+
 
 sendmessagetousers(St,Request) ->
 	io:fwrite("Inititiate sending"),
@@ -56,8 +77,6 @@ sendmessagetousers(St,Request) ->
 	Channel=St#channel_st.channelname,
 	MessageForGui={incoming_msg, Channel, Nick, Msg},
 	spawn(fun() ->broadcast(Recipients, MessageForGui) end),
-	io:fwrite("MessageForGui of ~p~n",[MessageForGui]),
-	%ResponseFromChannel=genserver:request(Head,MessageForGui),
 	{reply,ok,St}.
 
 

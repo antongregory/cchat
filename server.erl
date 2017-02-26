@@ -25,7 +25,19 @@ handle(St, {connect, Message}) ->
     io:fwrite("Server is sending: ~p~n", [Response]),
     connectionhandler(St,Message);
 
-
+handle(St,{disconnect,From}) ->
+	io:fwrite("state of server ~p~n", [St#server_st.users]),
+    Response = "disconectin ",
+	case lists:keymember(From, 1, St#server_st.users) of
+		true ->
+			NewUsers=lists:keydelete(From, 1,St#server_st.users),
+			NewState=St#server_st{users = [{Pid,Nick} || {Pid,Nick} <- St#server_st.users, Pid =/= From]},
+			io:fwrite("Disconnected list ~p~n",[NewState]),
+      		io:fwrite("User disconnected ~n"),
+			{reply,ok,NewState};
+		false ->
+			{reply,error,St}
+	end;
 
 
 handle(St,{join,Request})->
@@ -44,16 +56,31 @@ handle(St,{join,Request})->
 		true ->
 			io:fwrite("Channel is alive ~n"),
 			ResponseFromChannel=genserver:request(list_to_atom(ChannelName),MessageForChannel),
+			io:fwrite("response in join ve ~p~n",[ResponseFromChannel]),
+			{reply,ResponseFromChannel, St}
+	end;
+
+handle(St,{leave,Request})->
+	{From,ChannelName}=Request,	
+	io:fwrite("Handling channel request for leaving channel name ~p~n",[St#server_st.channels]),
+	Channels=list_to_atom(ChannelName),
+	MessageForChannel={leave,Request},
+	case lists:member(ChannelName,St#server_st.channels) of
+		false->
+			{reply,error, St};
+		true ->
+			io:fwrite("Channel is alive ~n"),
+			ResponseFromChannel=genserver:request(list_to_atom(ChannelName),MessageForChannel),
+			io:fwrite("response in leave"),
 			{reply,ResponseFromChannel, St}
 	end;
 
 handle(St, {msg_from_GUI,Request}) ->
-    % {reply, ok, St} ;
 	{From,Nick,Channel,Msg}=Request,
 	ChannelRequest={From,Nick,Msg},
 	io:fwrite("GUI ~p~n",[Channel]),
 	Response=genserver:request(list_to_atom(Channel),{msg_from_GUI,ChannelRequest}),
-    {reply, {error, not_implemented, "Not implemented"}, St};
+    {reply, Response, St};
 
 handle(St, {nick, Nick}) ->
     % {reply, ok, St} ;
