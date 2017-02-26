@@ -55,7 +55,7 @@ sendmessagetousers(St,Request) ->
 	io:fwrite("rec ~p~n",[Recipients]),
 	Channel=St#channel_st.channelname,
 	MessageForGui={incoming_msg, Channel, Nick, Msg},
-	spawn(fun() ->sendToUsers(Recipients, MessageForGui) end),
+	spawn(fun() ->broadcast(Recipients, MessageForGui) end),
 	io:fwrite("MessageForGui of ~p~n",[MessageForGui]),
 	%ResponseFromChannel=genserver:request(Head,MessageForGui),
 	{reply,ok,St}.
@@ -71,5 +71,5 @@ broadcast([ Pid | T ],Msg) ->
   io:fwrite("Inside sending 1 ~p~n",[Pid]),
   {incoming_msg, Channel, Nick, Message}=Msg,
   genserver:request(Pid,Msg),
-  sendToUsers(T,Msg).
+  broadcast(T,Msg).
 
