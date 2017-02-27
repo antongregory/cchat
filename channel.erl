@@ -37,8 +37,8 @@ handle(St, {join,Request}) ->
 
 
 handle(St, {msg_from_GUI,Message}) ->
-	io:fwrite("Message received in channel ~p~n",[St]),
-	{From,Nick,Channel,Msg}=Message,
+	io:fwrite("Message received in channel ~p~n",[Message]),
+	{From,Nick,Msg}=Message,
 	 case lists:member(From,St#channel_st.users) of
     	true ->
 			Response=sendmessagetousers(St,Message),

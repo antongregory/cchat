@@ -146,7 +146,8 @@ handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
 	io:fwrite("Inside client"),
 	MessageToGui=Nick++ ": "++Msg,
 	io:fwrite("Incoming msg ~p~p~p ~p~n",[Channel,Nick,MessageToGui,GUIName]),
-	spawn(fun() ->sendToGui(GUIName, Channel, MessageToGui) end),
+	sendToGui(GUIName, Channel, MessageToGui),
+	%spawn(fun() ->sendToGui(GUIName, Channel, MessageToGui) end),
     %Response=gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel,Msg}),
 	%io:fwrite("res ~p~n",[Response]),
     {reply, ok, St}.
