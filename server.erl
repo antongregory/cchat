@@ -27,10 +27,8 @@ handle(St, {connect, Message}) ->
 
 handle(St,{disconnect,From}) ->
 	io:fwrite("state of server ~p~n", [St#server_st.users]),
-    Response = "disconectin ",
 	case lists:keymember(From, 1, St#server_st.users) of
 		true ->
-			NewUsers=lists:keydelete(From, 1,St#server_st.users),
 			NewState=St#server_st{users = [{Pid,Nick} || {Pid,Nick} <- St#server_st.users, Pid =/= From]},
 			io:fwrite("Disconnected list ~p~n",[NewState]),
       		io:fwrite("User disconnected ~n"),
@@ -61,9 +59,8 @@ handle(St,{join,Request})->
 	end;
 
 handle(St,{leave,Request})->
-	{From,ChannelName}=Request,	
+	{_,ChannelName}=Request,	
 	io:fwrite("Handling channel request for leaving channel name ~p~n",[St#server_st.channels]),
-	Channels=list_to_atom(ChannelName),
 	MessageForChannel={leave,Request},
 	case lists:member(ChannelName,St#server_st.channels) of
 		false->
@@ -80,46 +77,39 @@ handle(St, {msg_from_GUI,Request}) ->
 	ChannelRequest={From,Nick,Msg},
 	io:fwrite("GUI ~p~n",[Channel]),
 	Response=genserver:request(list_to_atom(Channel),{msg_from_GUI,ChannelRequest}),
-    {reply, Response, St};
-
-handle(St, {nick, Nick}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} .
+    {reply, Response, St}.
 
 
 % function to handle the connection requests received in the server
 %% {reply, Response, State}, where Reply is the reply to be sent to the client
 %% and State is the  state of the server.
 connectionhandler(St,Message) ->
-	{From,Nick,Server}=Message,
+	{From,Nick,_}=Message,
 	User={From,Nick},
 	io:fwrite("Connection handler"),
-	UserList=[User],
-	io:fwrite("Format ~p~n ",[UserList]),
-	Response="failure",
-	CurrentUsers=St#server_st.users,
-	Sample=list_to_atom("lol"),
 	io:fwrite("Existing users ~p~n ",[St#server_st.users]),
 	case lists:keymember(From, 1, St#server_st.users) of
+		false ->
+			case checkNickExist(St,Nick) of 
+				true->
+					{reply,{error,nick_taken},St};
+				false ->
+					ServerState=St#server_st{users = [ User | St#server_st.users]},
+					io:fwrite("fab Users in list ~p~n",[ServerState]),
+					{reply,ok,ServerState}
+			end;
 		true ->
       		io:fwrite("User already connected"),
-			{reply,error,St};
+			{reply,{error,user_already_connected},St}
+			
+	end.
+
+checkNickExist(St,Nick) ->
+	case lists:keymember(Nick, 2, St#server_st.users) of
+		true ->
+			true;
 		false ->
-			ServerState=St#server_st{users = [ User | St#server_st.users]},
-			io:fwrite("fab Users in list ~p~n",[ServerState]),
-			{reply,ok,ServerState}
+			false
 	end.
 
 
-% Sample function trying to send message from server to client
-
-sendresponse(St,From) ->
-	Response="sample",
-	From ! {disconnect,Response},
-	io:fwrite("Msg summ"),
-    Ref = make_ref(),
-	Data=disconnect,
-    io:fwrite("connection check ~p ~p ~p ~p ~p ~n",[From,request,self(),Ref,Data]),
-    From!{request, self(), Ref, Data},
- 	%genserver:request(From,disconnect,100000),
-	io:fwrite("Msg sent as response").

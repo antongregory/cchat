@@ -38,7 +38,7 @@ handle(St, {join,Request}) ->
 
 handle(St, {msg_from_GUI,Message}) ->
 	io:fwrite("Message received in channel ~p~n",[Message]),
-	{From,Nick,Msg}=Message,
+	{From,_,_}=Message,
 	 case lists:member(From,St#channel_st.users) of
     	true ->
 			Response=sendmessagetousers(St,Message),
@@ -55,7 +55,7 @@ handle(St, {msg_from_GUI,Message}) ->
 
 handle(St, {leave,Info}) ->
 	io:fwrite("Leaving"),
-	{From,ChannelName} = Info,
+	{From,_} = Info,
 	io:fwrite("Joining ~p~n" ,[St#channel_st.users]),
  	case lists:member(From,St#channel_st.users) of
     	true ->
@@ -64,7 +64,7 @@ handle(St, {leave,Info}) ->
       		{reply,ok, NewState};
     	false ->
 			io:fwrite("User does not exist in channel"),
-			{reply, {error, user_not_joined, "User not found"}, St}
+			{reply, {error,user_not_joined, "User not found"}, St}
 		
  	end.
 
@@ -88,7 +88,6 @@ broadcast([], _) ->
 
 broadcast([ Pid | T ],Msg) ->
   io:fwrite("Inside sending 1 ~p~n",[Pid]),
-  {incoming_msg, Channel, Nick, Message}=Msg,
   genserver:request(Pid,Msg),
   broadcast(T,Msg).
 

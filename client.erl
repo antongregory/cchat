@@ -39,7 +39,7 @@ initial_state(Nick, GUIName) ->
 %% Disconnect from server
 handle(St, disconnect) ->
  
-	io:fwrite("leng of list ~p~n",[length(St#client_st.channels)]),
+io:fwrite("leng of list ~p~n",[length(St#client_st.channels)]),
  case length(St#client_st.channels) of 
 	 0 ->
 		 Response=clientrequesthandler(St,{disconnect,self()}),
@@ -48,13 +48,13 @@ handle(St, disconnect) ->
 			ok->
 				NewState=St#client_st{status=disconnected},
 				{reply, ok, NewState};
-			{error,connection_error,Msg}->
-				{reply, {error, connection_error, Msg}, St} ;
+			{error,user_not_connected,Msg}->
+				{reply, {error, user_not_connected, Msg}, St} ;
 			error->
 				{reply, {error, error_in_disconnecting, "Error in disconnecting"}, St}
 		end;
 	 _ ->
-		 {error,leave_channels_first,"Leave channels first"}
+		 {reply,{error,leave_channels_first,"Leave channels first"}, St}
  	end;
 
 
@@ -89,11 +89,11 @@ handle(St, {leave, Channel}) ->
 	case Response of 
 		ok->
 			NewState=St#client_st{channels = [CName || CName <- St#client_st.channels, CName =/= Channel]},
-			{reply, ok, St};
+			{reply, ok, NewState};
 		{error,connection_error,Msg}->
 			 {reply, {error, user_not_connected, Msg}, St} ;
-		{error,user_not_joined,Msg}->
-			 {reply, {error, user_not_joined, Msg}, St} 
+		{error,user_not_joined,Message}->
+			 {reply, {error,user_not_joined, Message}, St} 
 
 	end;
 
@@ -113,6 +113,8 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
 			{reply, ok, St};
 		{error,connection_error,Msg}->
 			 {reply, {error, no_connection, "No connection"}, St} ;
+		{error,user_not_joined,Message}->
+			 {reply, {error, user_not_joined, Message}, St} ;
 		error->
 			 {reply, {error, not_implemented, "Not implemented"}, St} 
 
@@ -128,14 +130,13 @@ handle(St, whoami) ->
 
 %% Change nick
 handle(St, {nick, Nick}) ->
-	State=St#client_st{nick = Nick},
+	io:fwrite("Format ~p~n ",[ St#client_st.status]),
 	case St#client_st.status of
-		connected ->
-			{reply, ok,State};
-			 %{reply, {error, user_connected, "User connected already"}, St} ;			 	
 		disconnected ->
-			 %register(Nick,self()),
-			 {reply, ok,State}
+			State=St#client_st{nick = Nick},
+			{reply, ok,State};	 	
+		connected ->
+			 {reply, {error, user_already_connected, "User connected already"}, St} 
 	end;
 	
 	
@@ -144,7 +145,7 @@ handle(St, {nick, Nick}) ->
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Nick, Msg}) ->
 	io:fwrite("Inside client"),
-	MessageToGui=Nick++ ": "++Msg,
+	MessageToGui=Nick++ "> "++Msg,
 	io:fwrite("Incoming msg ~p~p~p ~p~n",[Channel,Nick,MessageToGui,GUIName]),
 	sendToGui(GUIName, Channel, MessageToGui),
 	%spawn(fun() ->sendToGui(GUIName, Channel, MessageToGui) end),
@@ -163,7 +164,7 @@ clientrequesthandler(St,ServerRequest)->
 			io:fwrite("Request sent to server ~p~n",[ServerRequest]),
 			genserver:request(ServerAtom,ServerRequest);
 		disconnected ->
-			{error,connection_error,"Connect to server before proceeding"}
+			{error,user_not_connected,"Connect to server before proceeding"}
 
 end.
 
@@ -177,15 +178,20 @@ connectionhandler(St,{connect,Server}) ->
 	ServerAtom=list_to_atom(Server),
 	case lists:member(ServerAtom, registered()) of 
 		true ->
-			Response = genserver:request(ServerAtom, Request),
-			io:fwrite("Client received: ~p~n", [Response]),
-				case Response of
-					error ->
-						{reply, {error, connection_exist, "User is connected already"}, St};
-					ok->
-						{reply, ok, St#client_st{server=ServerAtom,status = connected}}
-				end;
+			waitforconnection(St,ServerAtom,Request); 
 		false ->	
-			{reply, {error, server_error, "Start server"}, St}
+			{reply, {error, server_not_reached, "Server not reached"}, St}
 	end.
 
+waitforconnection(St,ServerAtom,Request) ->
+	try genserver:request(ServerAtom, Request) of
+		error ->
+			{reply, {error, connection_exist, "User is connected already"}, St};
+		ok->
+			{reply, ok, St#client_st{server=ServerAtom,status = connected}};
+		{error,nick_taken} ->
+			{reply, {error, nick_taken, "Nick name exist already"}, St}
+	catch
+     	exit:"Timeout" -> 
+			{reply, {error, server_not_reached, "Server not reached"}, St}
+	end.
