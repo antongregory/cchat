@@ -42,6 +42,7 @@ handle(St, {msg_from_GUI,Message}) ->
 	 case lists:member(From,St#channel_st.users) of
     	true ->
 			Response=sendmessagetousers(St,Message),
+			io:fwrite("Response for the caller ~p~n",[Response]),
 			Response;
 
     	false ->

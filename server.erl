@@ -25,6 +25,8 @@ handle(St, {connect, Message}) ->
     io:fwrite("Server is sending: ~p~n", [Response]),
     connectionhandler(St,Message);
 
+% Handles the disconnect request from the client
+% returns ok on sucessful disconnection and error in case of failure
 handle(St,{disconnect,From}) ->
 	io:fwrite("state of server ~p~n", [St#server_st.users]),
 	case lists:keymember(From, 1, St#server_st.users) of
@@ -37,6 +39,8 @@ handle(St,{disconnect,From}) ->
 			{reply,error,St}
 	end;
 
+% Handles the join request from the client
+% returns ok on sucessful joining to the channel requested and error in case of failure
 
 handle(St,{join,Request})->
 	{From,ChannelName}=Request,	
@@ -58,6 +62,9 @@ handle(St,{join,Request})->
 			{reply,ResponseFromChannel, St}
 	end;
 
+% Handles the leave request from the client
+% returns ok on sucessful leaving to the channel requested and error in case of failure
+
 handle(St,{leave,Request})->
 	{_,ChannelName}=Request,	
 	io:fwrite("Handling channel request for leaving channel name ~p~n",[St#server_st.channels]),
@@ -70,14 +77,8 @@ handle(St,{leave,Request})->
 			ResponseFromChannel=genserver:request(list_to_atom(ChannelName),MessageForChannel),
 			io:fwrite("response in leave"),
 			{reply,ResponseFromChannel, St}
-	end;
+	end.
 
-handle(St, {msg_from_GUI,Request}) ->
-	{From,Nick,Channel,Msg}=Request,
-	ChannelRequest={From,Nick,Msg},
-	io:fwrite("GUI ~p~n",[Channel]),
-	Response=genserver:request(list_to_atom(Channel),{msg_from_GUI,ChannelRequest}),
-    {reply, Response, St}.
 
 
 % function to handle the connection requests received in the server
@@ -104,6 +105,8 @@ connectionhandler(St,Message) ->
 			
 	end.
 
+%% checks if the nick exist already in the server
+%% returns true if exist and false if not
 checkNickExist(St,Nick) ->
 	case lists:keymember(Nick, 2, St#server_st.users) of
 		true ->
