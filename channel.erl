@@ -17,8 +17,9 @@ initial_state(ChannelName) ->
     #channel_st{channelname=ChannelName}.
 
 
-
-
+%% ====================================================================
+% Handles all the incoming request to the channel process
+%% ====================================================================
 handle(St, {join,Request}) ->
 	io:fwrite("Joining "),
 	{From,ChannelName} = Request,
@@ -26,7 +27,7 @@ handle(St, {join,Request}) ->
 	case lists:member(From,St#channel_st.users) of
     	false ->
 			io:fwrite("Flase"),
-      		NewState = St#channel_st{users = [ From | St#channel_st.users ]},
+      		NewState = St#channel_st{users = [ From | St#channel_st.users ]},		% adds the user who issued join command
 			io:fwrite("State of chanel: ~p~n",[NewState]),
       		{reply,ok, NewState};
     	true ->
@@ -34,7 +35,11 @@ handle(St, {join,Request}) ->
 			{reply, {error, user_already_joined, "User joined in channel already"}, St}
 		
  	end;
-
+%% ======================================================================================
+%%  Handles all the request for message sent from gui to the other users in the channel
+%% Checks if the from id of the message exist in the channel , if so broadcasts the message
+%% to the users in the channel
+%% ======================================================================================
 
 handle(St, {msg_from_GUI,Message}) ->
 	io:fwrite("Message received in channel ~p~n",[Message]),
@@ -51,8 +56,10 @@ handle(St, {msg_from_GUI,Message}) ->
 		
  	end;
 
-
-
+%% ======================================================================================
+%% Handles all the request for removing the user from the channle
+%% Checks if the from user exist in the channel 
+%% ======================================================================================
 
 handle(St, {leave,Info}) ->
 	io:fwrite("Leaving"),
@@ -60,16 +67,16 @@ handle(St, {leave,Info}) ->
 	io:fwrite("Joining ~p~n" ,[St#channel_st.users]),
  	case lists:member(From,St#channel_st.users) of
     	true ->
-			NewState=St#channel_st{users = [Pid || Pid <- St#channel_st.users, Pid =/= From]},
-			io:fwrite("State of chanel: ~p~n",[NewState]),
+			NewState=St#channel_st{users = [Pid || Pid <- St#channel_st.users, Pid =/= From]},   	% removes the user who issued leave command
       		{reply,ok, NewState};
     	false ->
 			io:fwrite("User does not exist in channel"),
 			{reply, {error,user_not_joined, "User not found"}, St}
 		
  	end.
-
-
+%% ======================================================================================
+%% Function to send message to the users in the channel
+%% ======================================================================================
 sendmessagetousers(St,Request) ->
 	io:fwrite("Inititiate sending"),
 	{From,Nick,Msg}=Request,
@@ -77,12 +84,15 @@ sendmessagetousers(St,Request) ->
 	io:fwrite("rec ~p~n",[Recipients]),
 	Channel=St#channel_st.channelname,
 	MessageForGui={incoming_msg, Channel, Nick, Msg},
-	spawn(fun() ->broadcast(Recipients, MessageForGui) end),
+	spawn(fun() ->broadcast(Recipients, MessageForGui) end),			% creates a new process to broadcast the message
 	{reply,ok,St}.
 
 
 
-%% broadcast the message until the list is over
+%% ======================================================================================
+%% sends the message to the recipients in the list until the list is over
+%% input-> list of recipients ; message- message to be broadasted
+%% ======================================================================================
 broadcast([], _) ->
   io:fwrite("Inside sending main ~n"),	
   ok;

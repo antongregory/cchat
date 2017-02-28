@@ -17,21 +17,22 @@ initial_state(ServerName) ->
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
-
+%% ---------------------------------------------------------------------------
 handle(St, {connect, Message}) ->
-	io:fwrite("state of server ~p~n", [St#server_st.servername]),
-    io:fwrite("Server received: ~p~n", [Message]),
-    Response = "hi!",
-    io:fwrite("Server is sending: ~p~n", [Response]),
+    io:fwrite("Server receivedthe connection request: ~p~n", [Message]),
     connectionhandler(St,Message);
 
+
+
+%% --------------------------------------------------------------------------------------
 % Handles the disconnect request from the client
 % returns ok on sucessful disconnection and error in case of failure
+%% --------------------------------------------------------------------------------------
 handle(St,{disconnect,From}) ->
 	io:fwrite("state of server ~p~n", [St#server_st.users]),
 	case lists:keymember(From, 1, St#server_st.users) of
 		true ->
-			NewState=St#server_st{users = [{Pid,Nick} || {Pid,Nick} <- St#server_st.users, Pid =/= From]},
+			NewState=St#server_st{users = [{Pid,Nick} || {Pid,Nick} <- St#server_st.users, Pid =/= From]}, 		% removes the user from the list in the server state
 			io:fwrite("Disconnected list ~p~n",[NewState]),
       		io:fwrite("User disconnected ~n"),
 			{reply,ok,NewState};
@@ -39,8 +40,10 @@ handle(St,{disconnect,From}) ->
 			{reply,error,St}
 	end;
 
+%% --------------------------------------------------------------------------------------
 % Handles the join request from the client
 % returns ok on sucessful joining to the channel requested and error in case of failure
+%% --------------------------------------------------------------------------------------
 
 handle(St,{join,Request})->
 	{From,ChannelName}=Request,	
@@ -61,10 +64,10 @@ handle(St,{join,Request})->
 			io:fwrite("response in join ve ~p~n",[ResponseFromChannel]),
 			{reply,ResponseFromChannel, St}
 	end;
-
+%% --------------------------------------------------------------------------------------
 % Handles the leave request from the client
 % returns ok on sucessful leaving to the channel requested and error in case of failure
-
+%% --------------------------------------------------------------------------------------
 handle(St,{leave,Request})->
 	{_,ChannelName}=Request,	
 	io:fwrite("Handling channel request for leaving channel name ~p~n",[St#server_st.channels]),
@@ -80,10 +83,11 @@ handle(St,{leave,Request})->
 	end.
 
 
-
+%% --------------------------------------------------------------------------------------
 % function to handle the connection requests received in the server
 %% {reply, Response, State}, where Reply is the reply to be sent to the client
 %% and State is the  state of the server.
+%% --------------------------------------------------------------------------------------
 connectionhandler(St,Message) ->
 	{From,Nick,_}=Message,
 	User={From,Nick},
@@ -104,9 +108,10 @@ connectionhandler(St,Message) ->
 			{reply,{error,user_already_connected},St}
 			
 	end.
-
+%% --------------------------------------------------------------------------------------
 %% checks if the nick exist already in the server
 %% returns true if exist and false if not
+%% --------------------------------------------------------------------------------------
 checkNickExist(St,Nick) ->
 	case lists:keymember(Nick, 2, St#server_st.users) of
 		true ->

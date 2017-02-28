@@ -5,8 +5,7 @@
 -record(client_st, {gui,server,status=disconnected,nick,channels=[]}).
 
 % This record defines the structure of the server process.
-% Add whatever other fields you need.
--record(server_st, {servername, users = [{}], channels = []}).
+-record(server_st, {servername, users = [], channels = []}).
 
-% This record is for handling the channel parameters
+% This record is for handling the channel process
 -record(channel_st,{channelname,users=[]}).

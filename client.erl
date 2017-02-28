@@ -33,7 +33,7 @@ initial_state(Nick, GUIName) ->
 			io:fwrite("Response of  connection ~p~n",[Response]),
 			Response;
 		_ ->
-			io:fwrite("Invalid command"),
+			io:fwrite("Invalid client status"),
 			{reply, {error, connection_error, "Error while connecting"}, St}
 	end;
 		
@@ -45,6 +45,8 @@ initial_state(Nick, GUIName) ->
 %% If the client is connected to channels then the client is not allowed to disconnect until the client leaves the channels
 %% If the user is not connected , send back the error message to gui else send ok
 %% ---------------------------------------------------------------------------
+
+
 handle(St, disconnect) ->
 	io:fwrite("leng of list ~p~n",[length(St#client_st.channels)]),
 	case length(St#client_st.channels) of 
