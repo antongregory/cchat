@@ -18,51 +18,39 @@ initial_state(ServerName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
 
-handle(St, Request) ->
-    case Request of
-        {connect, Info} ->
-            connectHandler(St, Info);
-        {disconnect, Info} ->
-            disconnectHandler(St, Info);
-        {join, Info} ->
-            joinHandler(St, Info)
-    end.
-
-connectHandler(St, {From, Nick, Server}) ->
-    case lists:member(Nick, St#server_st.users) of
+handle(St, {connect, {From, Nick}}) ->
+    case lists:keymember(From, 1, St#server_st.users) of
         true ->
-            {reply, "User already connected", St};
+            {reply, connection_exists, St};
         false ->
-            NewSt = St#server_st{users = [Nick | St#server_st.users]},
-            {reply, "Connection established", NewSt}
-    end.
+            case lists:keymember(Nick, 2, St#server_st.users) of
+                true ->
+                    {reply, nick_taken, St};
+                false ->
+                    User = {From, Nick},
+                    NewSt = St#server_st{users = [User | St#server_st.users]},
+                    {reply, ok, NewSt}
+            end
+    end;
 
-disconnectHandler(St, {From, Nick, ClientId}) ->
+handle(St, {disconnect, {Nick, ClientId}}) ->
     case ClientId#client_st.channels =:= [] of
         true ->
-            case lists:member(Nick, St#server_st.users) of
-                true ->
-                    NewSt = St#server_st{users = [Name || Name <- St#server_st.users, Name =/= Nick]},
-                    {reply, "User disconnected", NewSt};
-                false ->
-                    {reply, "User not connected", St}
-            end;
+            NewSt = St#server_st{users = [Name || Name <- St#server_st.users, Name =/= Nick]},
+            {reply, ok, NewSt};
         false ->
-            {reply, "Leave channels first", St}
-    end.
+            {reply, leave_channel_first, St}
+    end;
 
-joinHandler(St, {From, User, Channel}) ->
+handle(St, {join, {From, Channel}}) ->
     case lists:member(Channel, St#server_st.channels) of
         true ->
-            Request = {From, User, Channel},
-            Response = genserver:request(list_to_atom(Channel), {join, Request}),
+            Response = genserver:request(list_to_atom(Channel), {join, {From}}),
             {reply, Response, St};
         false ->
             genserver:start(list_to_atom(Channel), channel:initial_state(Channel), fun channel:handle/2),
             NewSt = St#server_st{channels = [Channel | St#server_st.channels]},
-            Request = {From, User, Channel},
-            Response = genserver:request(list_to_atom(Channel), {join, Request}),
+            Response = genserver:request(list_to_atom(Channel), {join, {From}}),
             {reply, Response, NewSt}
     end.
-
 

@@ -7,7 +7,7 @@
 
 %% Produce initial state
 initial_state(Nick, GUIName) ->
-    #client_st { nick = Nick, gui = GUIName, status = disconnected, channels = [] }.
+    #client_st { nick = Nick, server = "", gui = GUIName, status = disconnected, channels = [] }.
 
 %% ---------------------------------------------------------------------------
 
@@ -22,39 +22,49 @@ initial_state(Nick, GUIName) ->
 handle(St, {connect, Server}) ->
     From = self(),
     Nick = St#client_st.nick,
-    Request = {connect, {From, Nick, Server}},
+    Request = {connect, {From, Nick}},
     ServerAtom = list_to_atom(Server),
-    Response = genserver:request(ServerAtom, Request),
-
-    case Response of
-        "Connection established" ->
-            {reply, ok, St#client_st{status = connected}};
-        "User already connected" ->
-            {reply, {error, connection_exist, "User already connected"} ,St}
-    end ;
+    case lists:member(ServerAtom, registered()) of
+        true ->
+            try genserver:request(ServerAtom, Request) of
+                ok ->
+                    {reply, ok, St#client_st{status = connected, server = Server}};
+                connection_exists ->
+                    {reply, {error, connection_exists, "Connection exists"}, St};
+                nick_taken ->
+                    {reply, {error, nick_taken, "Nick taken"}, St}
+            catch
+                exit:"Timeout" -> {reply, {error, server_not_reached, "Server not reached"}, St}
+            end;
+        false ->
+            {reply, {error, server_not_reached, "Server not reached"}, St}
+    end;
 
 %% Disconnect from server
 handle(St, disconnect) ->
-    From = self(),
-    Nick = St#client_st.nick,
-    Request = {disconnect, {From, Nick, St}},
-    ServerAtom = list_to_atom("shire"),
-    Response = genserver:request(ServerAtom, Request),
+    case St#client_st.status of
+        connected ->
+            Nick = St#client_st.nick,
+            Request = {disconnect, {Nick, St}},
+            ServerAtom = list_to_atom(St#client_st.server),
+            Response = genserver:request(ServerAtom, Request),
 
-    case Response of
-        "User disconnected" ->
-            {reply, ok, St#client_st{status = disconnected}};
-        "User not connected" ->
-            {reply, {error, user_not_connected, "User not connected"}, St};
-        "Leave channels first" ->
-            {reply, {error, leave_channels_first, "Leave channels first"}, St}
+            case Response of
+                ok ->
+                    {reply, ok, St#client_st{status = disconnected}};
+                leave_channel_first  ->
+                    {reply, {error, leave_channels_first, "Leave channels first"}, St}
+            end;
+        disconnected ->
+            {reply, {error, user_not_connected, "User not connected"}, St}
     end;
 
 % Join channel
 handle(St, {join, Channel}) ->
     From = self(),
-    Request = {join, {From, St, Channel}},
-    Response = genserver:request(list_to_atom("shire"), Request),
+    Request = {join, {From, Channel}},
+    ServerAtom = list_to_atom(St#client_st.server),
+    Response = genserver:request(ServerAtom, Request),
 
     case Response of
       "Channel joined" ->
@@ -62,9 +72,11 @@ handle(St, {join, Channel}) ->
       "User already joined" ->
         {reply, {error, user_already_joined, "User already joined"}, St}
     end;
+
 %% Leave channel
 handle(St, {leave, Channel}) ->
-    Request = {leave, St},
+    From = self(),
+    Request = {leave, From},
     ChannelAtom = list_to_atom(Channel),
     Response = genserver:request(ChannelAtom, Request),
 
@@ -78,8 +90,9 @@ handle(St, {leave, Channel}) ->
 % Sending messages
 handle(St, {msg_from_GUI, Channel, Msg}) ->
     % {reply, ok, St} ;
+    From = self(),
     ChannelAtom = list_to_atom(Channel),
-    Request = {msg_from_gui, {St, Channel, Msg}},
+    Request = {msg_from_gui, {From, St#client_st.nick, Channel, Msg}},
     Response = genserver:request(ChannelAtom, Request),
     case Response of
         "User in channel" ->
@@ -99,7 +112,7 @@ handle(St, {nick, Nick}) ->
         disconnected ->
             {reply, ok, St#client_st{nick = Nick}};
         connected ->
-            {reply, {error, user_already_connected, "User already connected", St}}
+            {reply, {error, user_already_connected, "User already connected"}, St}
     end;
 
 %% Incoming message

@@ -5,39 +5,29 @@
 initial_state(ChannelName) ->
   #channel_st{channelName = ChannelName, users = []}.
 
-handle(St, Request) ->
-  case Request of
-    {join, Info} ->
-      joinHandle(St, Info);
-    {leave, Info} ->
-      leaveHandle(St, Info);
-    {msg_from_gui, Info} ->
-      msgHandle(St, Info)
-  end.
-
-joinHandle(St, {From, User, Channel}) ->
-  case lists:keymember(User#client_st.gui, 2, St#channel_st.users) of
+handle(St, {join, {From}}) ->
+  case lists:member(From, St#channel_st.users) of
     true ->
       {reply, "User already joined", St};
     false ->
-      NewSt = St#channel_st{users = [User | St#channel_st.users]},
+      NewSt = St#channel_st{users = [From | St#channel_st.users]},
       {reply, "Channel joined", NewSt}
-  end.
+  end;
 
-leaveHandle(St, User) ->
-  case lists:keymember(User#client_st.gui, 2, St#channel_st.users) of
+handle(St, {leave, From}) ->
+  case lists:member(From, St#channel_st.users) of
     true ->
-      NewSt = St#channel_st{users = [Pid || Pid <- St#channel_st.users, Pid =/= User]},
+      NewSt = St#channel_st{users = [Pid || Pid <- St#channel_st.users, Pid =/= From]},
       {reply, "User left", NewSt};
     false ->
       {reply, "User not joined", St}
-  end.
+  end;
 
-msgHandle(St, {User, Channel, Msg}) ->
-  case lists:keymember(User#client_st.gui, 2, St#channel_st.users) of
+handle(St, {msg_from_gui, {From, Nick, Channel, Msg}}) ->
+  case lists:member(From, St#channel_st.users) of
     true ->
-      Request = {incoming_msg, Channel, User#client_st.nick, Msg},
-      [client:handle(ChannelUserID, Request) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= User],
+      Request = {incoming_msg, Channel, Nick, Msg},
+      [spawn (fun() -> genserver:request(ChannelUserID, Request) end) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= From],
       {reply, "User in channel", St};
     false ->
       {reply, "User not joined", St}
