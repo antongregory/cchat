@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{serverName = ServerName, users = [], channels = []}.
+    #server_st{servername=ServerName}.
 
 %% ---------------------------------------------------------------------------
 
@@ -17,40 +17,121 @@ initial_state(ServerName) ->
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
+%% ---------------------------------------------------------------------------
+assign_tasks([], _) -> [] ;
+assign_tasks(Users, Tasks) ->
+  [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task}
+  || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
 
-handle(St, {connect, {From, Nick}}) ->
-    case lists:keymember(From, 1, St#server_st.users) of
-        true ->
-            {reply, connection_exists, St};
-        false ->
-            case lists:keymember(Nick, 2, St#server_st.users) of
-                true ->
-                    {reply, nick_taken, St};
-                false ->
-                    User = {From, Nick},
-                    NewSt = St#server_st{users = [User | St#server_st.users]},
-                    {reply, ok, NewSt}
-            end
-    end;
+handle(St, {send_job, {Fun, List}}) ->
+    io:fwrite("in server ~n"),
+    Users = St#server_st.users,
+    AssignedTasks = assign_tasks(Users, List),
+    io:fwrite("Assigned tasks to users ~p ~n", [AssignedTasks]),
+    [spawn (fun() -> genserver:request(Pid, {apply_function, {Fun, Element}}) end) || {{Pid, _}, Element} <- AssignedTasks],
+    %[spawn (fun() -> genserver:request(ChannelUserID, Request) end) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= From],
+    {reply, ok, St};	
 
-handle(St, {disconnect, {Nick, ClientId}}) ->
-    case ClientId#client_st.channels =:= [] of
-        true ->
-            NewSt = St#server_st{users = [Name || Name <- St#server_st.users, Name =/= Nick]},
-            {reply, ok, NewSt};
-        false ->
-            {reply, leave_channel_first, St}
-    end;
+handle(St, {connect, Message}) ->
+    io:fwrite("Server receivedthe connection request: ~p~n", [Message]),
+    connectionhandler(St,Message);
 
-handle(St, {join, {From, Channel}}) ->
-    case lists:member(Channel, St#server_st.channels) of
-        true ->
-            Response = genserver:request(list_to_atom(Channel), {join, {From}}),
-            {reply, Response, St};
-        false ->
-            genserver:start(list_to_atom(Channel), channel:initial_state(Channel), fun channel:handle/2),
-            NewSt = St#server_st{channels = [Channel | St#server_st.channels]},
-            Response = genserver:request(list_to_atom(Channel), {join, {From}}),
-            {reply, Response, NewSt}
-    end.
+
+
+%% --------------------------------------------------------------------------------------
+% Handles the disconnect request from the client
+% returns ok on sucessful disconnection and error in case of failure
+%% --------------------------------------------------------------------------------------
+handle(St,{disconnect,From}) ->
+	io:fwrite("state of server ~p~n", [St#server_st.users]),
+	case lists:keymember(From, 1, St#server_st.users) of
+		true ->
+			NewState=St#server_st{users = [{Pid,Nick} || {Pid,Nick} <- St#server_st.users, Pid =/= From]}, 		% removes the user from the list in the server state
+			io:fwrite("Disconnected list ~p~n",[NewState]),
+      		io:fwrite("User disconnected ~n"),
+			{reply,ok,NewState};
+		false ->
+			{reply,error,St}
+	end;
+
+%% --------------------------------------------------------------------------------------
+% Handles the join request from the client
+% returns ok on sucessful joining to the channel requested and error in case of failure
+%% --------------------------------------------------------------------------------------
+
+handle(St,{join,Request})->
+	{From,ChannelName}=Request,	
+	io:fwrite("Handling channel request for channel name ~p~n",[St#server_st.channels]),
+	Channels=list_to_atom(ChannelName),
+	List=lists:member(Channels, St#server_st.channels),
+	MessageForChannel={join,Request},
+	case lists:member(ChannelName,St#server_st.channels) of
+		
+		false->
+			genserver:start(list_to_atom(ChannelName), channel:initial_state(ChannelName), fun channel:handle/2),
+			ServerState=St#server_st{channels = [ ChannelName | St#server_st.channels]},
+			Response=genserver:request(list_to_atom(ChannelName),MessageForChannel),
+			{reply, Response, ServerState};
+		true ->
+			io:fwrite("Channel is alive ~n"),
+			ResponseFromChannel=genserver:request(list_to_atom(ChannelName),MessageForChannel),
+			io:fwrite("response in join ve ~p~n",[ResponseFromChannel]),
+			{reply,ResponseFromChannel, St}
+	end;
+%% --------------------------------------------------------------------------------------
+% Handles the leave request from the client
+% returns ok on sucessful leaving to the channel requested and error in case of failure
+%% --------------------------------------------------------------------------------------
+handle(St,{leave,Request})->
+	{_,ChannelName}=Request,	
+	io:fwrite("Handling channel request for leaving channel name ~p~n",[St#server_st.channels]),
+	MessageForChannel={leave,Request},
+	case lists:member(ChannelName,St#server_st.channels) of
+		false->
+			{reply,error, St};
+		true ->
+			io:fwrite("Channel is alive ~n"),
+			ResponseFromChannel=genserver:request(list_to_atom(ChannelName),MessageForChannel),
+			io:fwrite("response in leave"),
+			{reply,ResponseFromChannel, St}
+	end.
+
+
+%% --------------------------------------------------------------------------------------
+% function to handle the connection requests received in the server
+%% {reply, Response, State}, where Reply is the reply to be sent to the client
+%% and State is the  state of the server.
+%% --------------------------------------------------------------------------------------
+connectionhandler(St,Message) ->
+	{From,Nick,_}=Message,
+	User={From,Nick},
+	io:fwrite("Connection handler"),
+	io:fwrite("Existing users ~p~n ",[St#server_st.users]),
+	case lists:keymember(From, 1, St#server_st.users) of
+		false ->
+			case checkNickExist(St,Nick) of 
+				true->
+					{reply,{error,nick_taken},St};
+				false ->
+					ServerState=St#server_st{users = [ User | St#server_st.users]},
+					io:fwrite("fab Users in list ~p~n",[ServerState]),
+					{reply,ok,ServerState}
+			end;
+		true ->
+      		io:fwrite("User already connected"),
+			{reply,{error,user_already_connected},St}
+			
+	end.
+%% --------------------------------------------------------------------------------------
+%% checks if the nick exist already in the server
+%% returns true if exist and false if not
+%% --------------------------------------------------------------------------------------
+checkNickExist(St,Nick) ->
+	case lists:keymember(Nick, 2, St#server_st.users) of
+		true ->
+			true;
+		false ->
+			false
+	end.
+
 

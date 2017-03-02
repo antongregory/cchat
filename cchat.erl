@@ -1,6 +1,6 @@
 % Top level module
 -module(cchat).
--export([server/0,client/0,start/0,start2/0]).
+-export([server/0,client/0,start/0,start2/0, send_job/3]).
 -include_lib("./defs.hrl").
 
 %% Start a server
@@ -22,3 +22,9 @@ start2() ->
     server(),
     client(),
     client().
+
+send_job(Server, Fun, L) ->
+    ServerAtom = list_to_atom(Server),
+    Request = {send_job, {Fun, L}},
+    genserver:request(ServerAtom, Request),
+    {reply, ok, Server}.
