@@ -18,6 +18,22 @@ initial_state(ServerName) ->
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
 %% ---------------------------------------------------------------------------
+
+assign_tasks([], _) -> [] ;
+assign_tasks(Users, Tasks) ->
+  [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task}
+  || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
+
+handle(St, {send_job, {Fun, List}}) ->
+    io:fwrite("in server ~n"),
+    Users = St#server_st.users,
+    AssignedTasks = assign_tasks(Users, List),
+    io:fwrite("Assigned tasks to users ~p ~n", [AssignedTasks]),
+    [spawn (fun() -> genserver:request(Pid, {apply_function, {Fun, Element}}) end) || {{Pid, _}, Element} <- AssignedTasks],
+    %[spawn (fun() -> genserver:request(ChannelUserID, Request) end) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= From],
+    {reply, ok, St};	
+
+
 handle(St, {connect, Message}) ->
     io:fwrite("Server receivedthe connection request: ~p~n", [Message]),
     connectionhandler(St,Message);

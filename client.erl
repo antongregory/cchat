@@ -22,6 +22,14 @@ initial_state(Nick, GUIName) ->
 %% requesting process and NewState is the new state of the client
 %% @returns the response received from ther server or channel based on what the function is about
 
+handle(St, {apply_function, {Fun, List}}) ->
+    io:fwrite("in client"),
+    {reply, ok, St};
+
+handle(St, {send_job, {Fun, L}}) ->
+    io:fwrite("hej");
+
+
 %% Connection request is sent to the server
 	handle(St, {connect, Server}) ->
 	io:fwrite("St#client_st.status ~p~n" ,[St#client_st.status]),
@@ -66,7 +74,6 @@ handle(St, disconnect) ->
 			 {reply,{error,leave_channels_first,"Leave channels first"}, St}
 	 	end;
 
-
 %% ---------------------------------------------------------------------------
 % Join channel
 %% {join,Channel} join is the pattern here and Channel is the name of the channel requested by the user
@@ -91,7 +98,6 @@ handle(St, {join, Channel}) ->
 			 {reply, {error, user_already_joined, Msg}, St} 
 
 	end;
-
 
 %% ---------------------------------------------------------------------------
 %% Leave channel
@@ -144,7 +150,6 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
 
 	end;
 
-
 %%  ---------------------------------------------------------------------------
 %% Get current nick
 %% returns the nick name of the user
@@ -172,8 +177,6 @@ handle(St, {nick, Nick}) ->
 	
 	
    
-
-
 
 %%  ---------------------------------------------------------------------------
 %% Incoming message from channel to the gui
@@ -266,4 +269,6 @@ waitforconnection(St,ServerAtom,Request) ->
 	catch
      	exit:"Timeout" -> 
 			{reply, {error, server_not_reached, "Server not reached"}, St}
+
 	end.
+

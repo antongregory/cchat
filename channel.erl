@@ -1,5 +1,4 @@
 %% @author antongregory
-%% @doc @todo Add description to channel.
 
 
 -module(channel).
@@ -101,4 +100,3 @@ broadcast([ Pid | T ],Msg) ->
   io:fwrite("Inside sending 1 ~p~n",[Pid]),
   genserver:request(Pid,Msg),
   broadcast(T,Msg).
-
