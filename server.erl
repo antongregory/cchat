@@ -27,11 +27,18 @@ assign_tasks(Users, Tasks) ->
 handle(St, {send_job, {Fun, List}}) ->
     io:fwrite("in server ~n"),
     Users = St#server_st.users,
-    AssignedTasks = assign_tasks(Users, List),
+	InputList=createInputList(List),
+	io:fwrite("input list ~p~n",[InputList]),
+    AssignedTasks = assign_tasks(Users, InputList),
     io:fwrite("Assigned tasks to users ~p ~n", [AssignedTasks]),
-    [spawn (fun() -> genserver:request(Pid, {apply_function, {Fun, Element}}) end) || {{Pid, _}, Element} <- AssignedTasks],
+	Userids=[Pid||{{Pid, _}, Element} <- AssignedTasks],
+	io:fwrite("Assigned tasks to users ~p ~n", [Userids]),
+	ServerId=self(),
+    Sample=[spawn (fun() -> NewState=samplefunctiontosend(St,Pid,ServerId,Fun,Element) end) || {{Pid, _}, Element} <- AssignedTasks],
+%% 	spawn(fun() ->broadcast(Userids, MessageForGui) end),
+	io:fwrite("Faasda ormat ~p~n",[Sample]),
     %[spawn (fun() -> genserver:request(ChannelUserID, Request) end) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= From],
-    {reply, ok, St};	
+    {reply, {job_ans,ok}, St};	
 
 
 handle(St, {connect, Message}) ->
@@ -80,6 +87,14 @@ handle(St,{join,Request})->
 			io:fwrite("response in join ve ~p~n",[ResponseFromChannel]),
 			{reply,ResponseFromChannel, St}
 	end;
+
+
+
+handle(St,{new_state,Result})->
+	io:fwrite("received new results ~p~n",[St#server_st.input]),
+	NewState = St#server_st{input = [ Result | St#server_st.input ]},
+	io:fwrite("received new state ~p~n",NewState#server_st.input),
+	{reply,ok, NewState};
 %% --------------------------------------------------------------------------------------
 % Handles the leave request from the client
 % returns ok on sucessful leaving to the channel requested and error in case of failure
@@ -136,4 +151,32 @@ checkNickExist(St,Nick) ->
 			false
 	end.
 
+
+
+samplefunctiontosend(St,Pid,ServerId,Fun,Element) ->
+	io:fwrite("sending to ~p ~p ~n",[Pid,self()]),
+	Response=genserver:request(Pid, {apply_function, {Fun,ServerId, Element}}),
+	{result,From,Result}=Response,
+	io:fwrite("Nw response ~p~n",[Response]),
+%% 	spawn(fun() ->genserver:request(ServerId, {new_state,Result}) end),
+	io:fwrite("respo~n"),
+	Response.
+
+createInputList(Input)->
+	N=length(Input),
+	IndexList=lists:seq(1,N),
+	NewInput=lists:zip(IndexList,Input).
+
+
+
+
+broadcast([], _) ->
+  io:fwrite("Inside sending in client ~n"),	
+  ok;
+
+
+broadcast([ Pid | T ],Msg) ->
+  io:fwrite("Inside sending 1 ~p~n",[Pid]),
+  genserver:request(Pid,Msg),
+  broadcast(T,Msg).
 

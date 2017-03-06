@@ -22,9 +22,17 @@ initial_state(Nick, GUIName) ->
 %% requesting process and NewState is the new state of the client
 %% @returns the response received from ther server or channel based on what the function is about
 
-handle(St, {apply_function, {Fun, List}}) ->
-    io:fwrite("in client"),
-    {reply, ok, St};
+handle(St, {apply_function, {Fun,Pid, List}}) ->
+     io:fwrite("in client ~p ~p ~n",[self(),List]),
+	 {Index,Element}=List,
+%% 	 In=[Elements|{Index,Element}<-List],
+	 io:fwrite("input received in client ~p~n",[Element]),
+ 	 io:fwrite("function in client ~p ~p ~n",[self(),Fun(Element)]),
+	 Result={Index,Fun(Element)},
+	 genserver:request(Pid,{new_state,Result}),
+	 
+	%io:fwrite("in client ~p~n",Fun(List)),
+       {reply, {result,self(),Result}, St};
 
 handle(St, {send_job, {Fun, L}}) ->
     io:fwrite("hej");
@@ -157,6 +165,7 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
 handle(St, whoami) ->
  	io:fwrite("Requested whoami ~n"),
     {reply, St#client_st.nick, St} ;
+
 
 %%  ---------------------------------------------------------------------------
 %% Change the nickname of the user

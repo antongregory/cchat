@@ -27,4 +27,9 @@ send_job(Server, Fun, L) ->
     ServerAtom = list_to_atom(Server),
     Request = {send_job, {Fun, L}},
     genserver:request(ServerAtom, Request),
-    {reply, ok, Server}.
+
+	receive
+    	{job_ans, Result} -> Result,
+		io:fwrite("Fo "),					 
+		Result
+  	end.
