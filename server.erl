@@ -24,21 +24,19 @@ assign_tasks(Users, Tasks) ->
   [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task}
   || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
 
-handle(St, {send_job, {Fun, List}}) ->
+handle(St, {send_job, {Fun,From,List}}) ->
     io:fwrite("in server ~n"),
     Users = St#server_st.users,
 	InputList=createInputList(List),
-	io:fwrite("input list ~p~n",[InputList]),
+	NewState=St#server_st{inputs = InputList},
+	io:fwrite("input list ~p~n",[NewState#server_st.inputs]),
     AssignedTasks = assign_tasks(Users, InputList),
     io:fwrite("Assigned tasks to users ~p ~n", [AssignedTasks]),
-	Userids=[Pid||{{Pid, _}, Element} <- AssignedTasks],
-	io:fwrite("Assigned tasks to users ~p ~n", [Userids]),
+
 	ServerId=self(),
-    Sample=[spawn (fun() -> NewState=samplefunctiontosend(St,Pid,ServerId,Fun,Element) end) || {{Pid, _}, Element} <- AssignedTasks],
-%% 	spawn(fun() ->broadcast(Userids, MessageForGui) end),
-	io:fwrite("Faasda ormat ~p~n",[Sample]),
+    [spawn (fun() -> samplefunctiontosend(Pid,From,ServerId,Fun,Element) end) || {{Pid, _}, Element} <- AssignedTasks],
     %[spawn (fun() -> genserver:request(ChannelUserID, Request) end) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= From],
-    {reply, {job_ans,ok}, St};	
+    {reply, {job_ans,ok}, NewState};	
 
 
 handle(St, {connect, Message}) ->
@@ -90,11 +88,26 @@ handle(St,{join,Request})->
 
 
 
-handle(St,{new_state,Result})->
-	io:fwrite("received new results ~p~n",[St#server_st.input]),
-	NewState = St#server_st{input = [ Result | St#server_st.input ]},
-	io:fwrite("received new state ~p~n",NewState#server_st.input),
-	{reply,ok, NewState};
+handle(St,{new_state,FromId,Result})->
+%% 	io:fwrite("Within new stat ~p~n",[Result]),
+	NewState = St#server_st{output = [ Result | St#server_st.output ]},
+%% 	io:fwrite("Within new state ~p~n",[NewState#server_st.output]),
+	LenOutput=length(NewState#server_st.output)-1,
+	LenInput=length(NewState#server_st.inputs),
+	case LenOutput of 
+		LenInput->
+			NewList=lists:delete({}, NewState#server_st.output),
+			SortedList=lists:keysort(1,NewList),
+		    FinalList=[Value || {_,Value} <- SortedList],
+			io:fwrite("sorted list ~p~n",[FinalList]),
+			spawn(fun() ->genserver:request(FromId,FinalList) end),
+		
+			{reply,ok, St#server_st{output = [{}]}};
+		_ ->
+%% 			io:fwrite("not equal ..waiting for other responses ~n"),
+			{reply,ok, NewState}
+	end;
+ 	
 %% --------------------------------------------------------------------------------------
 % Handles the leave request from the client
 % returns ok on sucessful leaving to the channel requested and error in case of failure
@@ -153,30 +166,13 @@ checkNickExist(St,Nick) ->
 
 
 
-samplefunctiontosend(St,Pid,ServerId,Fun,Element) ->
-	io:fwrite("sending to ~p ~p ~n",[Pid,self()]),
-	Response=genserver:request(Pid, {apply_function, {Fun,ServerId, Element}}),
-	{result,From,Result}=Response,
-	io:fwrite("Nw response ~p~n",[Response]),
-%% 	spawn(fun() ->genserver:request(ServerId, {new_state,Result}) end),
-	io:fwrite("respo~n"),
+samplefunctiontosend(Pid,From,ServerId,Fun,Element) ->
+	Response=genserver:request(Pid, {apply_function, {Fun,ServerId,From, Element}}),
 	Response.
 
 createInputList(Input)->
 	N=length(Input),
 	IndexList=lists:seq(1,N),
-	NewInput=lists:zip(IndexList,Input).
+	lists:zip(IndexList,Input).
 
-
-
-
-broadcast([], _) ->
-  io:fwrite("Inside sending in client ~n"),	
-  ok;
-
-
-broadcast([ Pid | T ],Msg) ->
-  io:fwrite("Inside sending 1 ~p~n",[Pid]),
-  genserver:request(Pid,Msg),
-  broadcast(T,Msg).
 

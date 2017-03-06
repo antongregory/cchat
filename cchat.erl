@@ -25,11 +25,19 @@ start2() ->
 
 send_job(Server, Fun, L) ->
     ServerAtom = list_to_atom(Server),
-    Request = {send_job, {Fun, L}},
+    Request = {send_job, {Fun,self(), L}},
     genserver:request(ServerAtom, Request),
+	Response=receiveResponse(),
+	io:fwrite("Got response back ~p~n",[Response]),
+	Response.
+	
 
+receiveResponse()->
+	io:fwrite("=============================================="),
 	receive
-    	{job_ans, Result} -> Result,
-		io:fwrite("Fo "),					 
-		Result
-  	end.
+		Results->
+			{request,_,_,Result}=Results,
+			%io:fwrite("+++++++++++++++  results ~p~n",[Result]),
+			Result
+
+	end.	

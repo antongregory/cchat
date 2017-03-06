@@ -22,20 +22,12 @@ initial_state(Nick, GUIName) ->
 %% requesting process and NewState is the new state of the client
 %% @returns the response received from ther server or channel based on what the function is about
 
-handle(St, {apply_function, {Fun,Pid, List}}) ->
-     io:fwrite("in client ~p ~p ~n",[self(),List]),
+handle(St, {apply_function, {Fun,Pid,FromId ,List}}) ->
+     %io:fwrite("in client ~p ~p ~n",[self(),List]),
 	 {Index,Element}=List,
-%% 	 In=[Elements|{Index,Element}<-List],
-	 io:fwrite("input received in client ~p~n",[Element]),
- 	 io:fwrite("function in client ~p ~p ~n",[self(),Fun(Element)]),
 	 Result={Index,Fun(Element)},
-	 genserver:request(Pid,{new_state,Result}),
-	 
-	%io:fwrite("in client ~p~n",Fun(List)),
-       {reply, {result,self(),Result}, St};
-
-handle(St, {send_job, {Fun, L}}) ->
-    io:fwrite("hej");
+	 genserver:request(Pid,{new_state,FromId,Result}),
+     {reply, {result,self(),Result}, St};
 
 
 %% Connection request is sent to the server

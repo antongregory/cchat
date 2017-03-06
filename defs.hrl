@@ -5,7 +5,7 @@
 -record(client_st, {gui,server,status=disconnected,nick,channels=[]}).
 
 % This record defines the structure of the server process.
--record(server_st, {servername, users = [], channels = [],input=[]}).
+-record(server_st, {servername, users = [], channels = [],inputs=[],output=[{}]}).
 
 % This record is for handling the channel process
 -record(channel_st,{channelname,users=[]}).
