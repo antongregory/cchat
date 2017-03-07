@@ -97,12 +97,11 @@ handle(St,{new_state,FromId,Result})->
 %% 	io:fwrite("Within new stat ~p~n",[Result]),
 	NewState = St#server_st{output = [ Result | St#server_st.output ]},
 %% 	io:fwrite("Within new state ~p~n",[NewState#server_st.output]),
-	LenOutput=length(NewState#server_st.output)-1,
+	LenOutput=length(NewState#server_st.output),
 	LenInput=length(NewState#server_st.inputs),
 	case LenOutput of 
 		LenInput->
-			NewList=lists:delete({}, NewState#server_st.output),
-			SortedList=lists:keysort(1,NewList),
+			SortedList=lists:keysort(1,NewState#server_st.output),
 		    FinalList=[Value || {_,Value} <- SortedList],
 			io:fwrite("sorted list ~p~n",[FinalList]),
 			spawn(fun() ->genserver:request(FromId,FinalList) end),
