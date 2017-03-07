@@ -22,12 +22,7 @@ initial_state(Nick, GUIName) ->
 %% requesting process and NewState is the new state of the client
 %% @returns the response received from ther server or channel based on what the function is about
 
-handle(St, {apply_function, {Fun,Pid,FromId ,List}}) ->
-     %io:fwrite("in client ~p ~p ~n",[self(),List]),
-	 {Index,Element}=List,
-	 Result={Index,Fun(Element)},
-	 genserver:request(Pid,{new_state,FromId,Result}),
-     {reply, {result,self(),Result}, St};
+
 
 
 %% Connection request is sent to the server
@@ -45,6 +40,21 @@ handle(St, {apply_function, {Fun,Pid,FromId ,List}}) ->
 			{reply, {error, connection_error, "Error while connecting"}, St}
 	end;
 		
+%% ---------------------------------------------------------------------------
+%% Applies the function on the input sent by the server 
+%% Input -> Fun : Function to be performed on the input (List)
+%% 		Pid : Pid of the server process
+%% 		FromId: Origin of the assign job request
+%% 		Item : Input Tuple list item
+%% If the user is not connected , send back the error message to gui else send ok
+%% ---------------------------------------------------------------------------
+
+handle(St, {apply_function, {Fun,Pid,FromId ,Item}}) ->
+     %io:fwrite("in client ~p ~p ~n",[self(),List]),
+	 {Index,Element}=Item,
+	 Result={Index,Fun(Element)},
+	 genserver:request(Pid,{new_state,FromId,Result}),
+     {reply, {result,self(),Result}, St};
    
 
 %% ---------------------------------------------------------------------------

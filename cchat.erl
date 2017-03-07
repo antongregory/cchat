@@ -23,21 +23,41 @@ start2() ->
     client(),
     client().
 
+%% =========================================================================================
+%% Sends the function to be performed to the server
+%% Checks if the server is a registered process before sending , else displays error message
+%% The return status of from the server is checked to know if all the clients are connected
+%% else throws error
+%% =========================================================================================
 send_job(Server, Fun, L) ->
     ServerAtom = list_to_atom(Server),
     Request = {send_job, {Fun,self(), L}},
-    genserver:request(ServerAtom, Request),
-	Response=receiveResponse(),
-	io:fwrite("Got response back ~p~n",[Response]),
-	Response.
+	case lists:member(ServerAtom, registered()) of 
+		true->
+			{job_ans,Status}=genserver:request(ServerAtom, Request),
+			io:fwrite("Status of assign job request to server: ~p~n",[Status]),	
+				case Status of 
+					ok->
+						Response=receiveResponse(),
+						io:fwrite("Response from the server: ~p~n",[Response]),
+						Response;
+					{error,Msg}->
+						Msg
+				end;
+    	false->
+			"Error:Server Not Reachable"
+			
+	end.
+		
+
 	
-
+%% ===================================================================================================
+%% This function receives the message sent by the server
+%% ===================================================================================================
 receiveResponse()->
-	io:fwrite("=============================================="),
+	io:fwrite("==============================================~n"),
 	receive
-		Results->
-			{request,_,_,Result}=Results,
-			%io:fwrite("+++++++++++++++  results ~p~n",[Result]),
+		{request,_,_,Result}->
 			Result
-
 	end.	
+

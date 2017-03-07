@@ -19,31 +19,32 @@ initial_state(ServerName) ->
 %% and NewState is the new state of the server.
 %% ---------------------------------------------------------------------------
 
-assign_tasks([], _) -> [] ;
-assign_tasks(Users, Tasks) ->
-  [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task}
-  || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
 
-handle(St, {send_job, {Fun,From,List}}) ->
-    io:fwrite("in server ~n"),
-    Users = St#server_st.users,
-	InputList=createInputList(List),
-	NewState=St#server_st{inputs = InputList},
-	io:fwrite("input list ~p~n",[NewState#server_st.inputs]),
-    AssignedTasks = assign_tasks(Users, InputList),
-    io:fwrite("Assigned tasks to users ~p ~n", [AssignedTasks]),
 
-	ServerId=self(),
-    [spawn (fun() -> samplefunctiontosend(Pid,From,ServerId,Fun,Element) end) || {{Pid, _}, Element} <- AssignedTasks],
-    %[spawn (fun() -> genserver:request(ChannelUserID, Request) end) || ChannelUserID <- St#channel_st.users, ChannelUserID =/= From],
-    {reply, {job_ans,ok}, NewState};	
 
+%% Handles the connection command from gui
 
 handle(St, {connect, Message}) ->
     io:fwrite("Server receivedthe connection request: ~p~n", [Message]),
     connectionhandler(St,Message);
 
-
+%% ---------------------------------------------------------------------------------------------------
+%% Handles the request to send the job to the clients connected to the server
+%% ---------------------------------------------------------------------------------------------------
+handle(St, {send_job, {Fun,From,List}}) ->
+    Users = St#server_st.users,
+	case length(Users) of 
+			0->
+			 	{reply, {job_ans,{error,"No clients are connected"}}, St};	
+			_->
+				InputList=createInputList(List),
+				NewState=St#server_st{inputs = InputList},
+			    AssignedTasks = assign_tasks(Users, InputList),
+			    io:fwrite("Assigned tasks to users ~p ~n", [AssignedTasks]),
+				ServerId=self(), 				%% Need to pass the server process id along with parameters to the clients
+			    [spawn (fun() -> sendFunctionToClients(Pid,From,ServerId,Fun,Element) end) || {{Pid, _}, Element} <- AssignedTasks],
+			    {reply, {job_ans,ok}, NewState}
+	end;
 
 %% --------------------------------------------------------------------------------------
 % Handles the disconnect request from the client
@@ -86,7 +87,11 @@ handle(St,{join,Request})->
 			{reply,ResponseFromChannel, St}
 	end;
 
-
+%% ---------------------------------------------------------------------------------------------
+%% Handles the message from clients after the job is performed
+%% Input-> FromID - The id of the process to which the result should be returned (ie:cchat process in this case)
+%% 		   Result - The result of a function from one client (This will be in tuple format)
+%% ---------------------------------------------------------------------------------------------
 
 handle(St,{new_state,FromId,Result})->
 %% 	io:fwrite("Within new stat ~p~n",[Result]),
@@ -165,14 +170,32 @@ checkNickExist(St,Nick) ->
 	end.
 
 
+%% ---------------------------------------------------------------------------------------
+%% This function sends the function to the client id provided as the parameter
+%% Input:  Pid - process id of the client, ServerId- Pid of the server process
+%% 		   Fun -Function that has to be performed by the client
+%%		   Element - Element on which the function should be done
+%% ---------------------------------------------------------------------------------------
+sendFunctionToClients(Pid,From,ServerId,Fun,Element) ->
+	genserver:request(Pid, {apply_function, {Fun,ServerId,From, Element}}).
 
-samplefunctiontosend(Pid,From,ServerId,Fun,Element) ->
-	Response=genserver:request(Pid, {apply_function, {Fun,ServerId,From, Element}}),
-	Response.
 
+%% --------------------------------------------------------------------------------------------------
+%% Creates a tuple list based on the input list provided
+%% The tuple has a format of {Index_Of_Element_In_Input,Element}
+%% The first item in the tuple acts as an id which could be used in re ordering the responses from client
+%% Input parameters -> Input list provided by the user
+%% ---------------------------------------------------------------------------------------------------
 createInputList(Input)->
-	N=length(Input),
-	IndexList=lists:seq(1,N),
-	lists:zip(IndexList,Input).
+	N=length(Input), 				% length of the input list
+	IndexList=lists:seq(1,N),		% Create a list based on the size of the input eg: if N=3, the list will be from 1 to 3 -> [1,2,3]
+	lists:zip(IndexList,Input).		% Creata a tupled list in the format {IndexList,Input}
 
+%% ---------------------------------------------------------------------------------------------------
+%% Assigns the tasks based on the number of clients connected to the server 
+%% ---------------------------------------------------------------------------------------------------
+assign_tasks([], _) -> [] ;
+assign_tasks(Users, Tasks) ->
+  [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task}
+  || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
 
